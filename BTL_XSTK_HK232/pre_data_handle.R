@@ -1,0 +1,141 @@
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(corrplot)
+############# Tien xu ly du lieu ##################################
+All_GPUs <- read.csv("D:/WORKSPACE/Data Science/Data_PreProcessing/Rcode/All_GPUs.csv")
+head(All_GPUs)
+dim(All_GPUs)
+All_GPUs <- replace(All_GPUs, All_GPUs == "", NA)
+All_GPUs <- replace(All_GPUs, All_GPUs == "\n- ", NA)
+All_GPUs <- replace(All_GPUs, All_GPUs == "None ", NA)
+na_counts <- colSums(is.na(All_GPUs))
+sort <- All_GPUs[ , order(na_counts)]
+colSums(is.na(sort))
+missing_data <- data.frame(
+  Column = colnames(All_GPUs),
+  Percentage_Missing = sapply(All_GPUs, function(x) sum(is.na(x)) / nrow(All_GPUs) * 100)
+)
+ggplot(missing_data, aes(x = Column, y = Percentage_Missing)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_text(aes(label = paste0(round(Percentage_Missing, 2), "%")), 
+            vjust = -0.5, size = 3) + 
+  labs(title = "Missing Data Percentage by Column",
+       x = "Column", y = "Percentage Missing") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+filtered_missing_data <- subset(missing_data, Percentage_Missing < 10)
+selected_columns <- filtered_missing_data$Column
+All_GPUs <- All_GPUs %>% 
+  select(all_of(selected_columns))
+head(All_GPUs)
+summary(All_GPUs)
+All_GPUs$Architecture <- factor(All_GPUs$Architecture)
+All_GPUs$Manufacturer <- factor(All_GPUs$Manufacturer)
+All_GPUs$Name <- factor(All_GPUs$Name)
+All_GPUs$Memory_Type <- factor(All_GPUs$Memory_Type)
+All_GPUs$Resolution_WxH <- factor(All_GPUs$Resolution_WxH)
+All_GPUs$Direct_X <- factor(All_GPUs$Direct_X)
+All_GPUs$Dedicated <- factor(All_GPUs$Dedicated)
+All_GPUs$Integrated <- factor(All_GPUs$Integrated)
+All_GPUs$Notebook_GPU <- factor(All_GPUs$Notebook_GPU)
+All_GPUs$SLI_Crossfire <- factor(All_GPUs$SLI_Crossfire)
+
+# Handle L2_Cache
+numeric_part <- as.numeric(gsub("[^0-9].*$", "", All_GPUs$L2_Cache))
+unit_part <- gsub("[0-9.]", "", All_GPUs$L2_Cache )
+table(unit_part)
+All_GPUs$L2_Cache <- numeric_part
+
+# Handle Memory_Bandwidth
+numeric_part <- as.numeric(gsub("[^0-9.]", "", All_GPUs$Memory_Bandwidth))
+unit_part <- gsub("[0-9.]", "", All_GPUs$Memory_Bandwidth )
+table(unit_part)
+numeric_part <- ifelse(unit_part == "MB/sec", numeric_part/1000, numeric_part)
+All_GPUs$Memory_Bandwidth <- numeric_part
+
+# Handle Memory_Bus
+numeric_part <- as.numeric(gsub("[^0-9.]", "", All_GPUs$Memory_Bus))
+unit_part <- gsub("[0-9.]", "", All_GPUs$Memory_Bus )
+table(unit_part)
+All_GPUs$Memory_Bus <- numeric_part
+
+# Handle Memory_Speed
+numeric_part <- as.numeric(gsub("[^0-9.]", "", All_GPUs$Memory_Speed))
+unit_part <- gsub("[0-9.]", "", All_GPUs$Memory_Speed )
+table(unit_part)
+All_GPUs$Memory_Speed<- numeric_part
+summary(All_GPUs)
+
+# Handle Release_Date
+not_na <- !is.na(All_GPUs$Release_Date)
+All_GPUs<- separate(All_GPUs, Release_Date, c("Release_Day", "Release_Month", "Release_Year"), sep = "-")
+All_GPUs$Release_Year <- as.numeric(All_GPUs$Release_Year)
+All_GPUs<-select(All_GPUs, -Release_Day, -Release_Month)
+summary(All_GPUs)
+
+
+# fill cac cot dinh luong voi median
+for (col in names(All_GPUs)) {
+  if (is.numeric(All_GPUs[[col]])) {
+    All_GPUs[[col]][is.na(All_GPUs[[col]])] <- median(All_GPUs[[col]], na.rm = TRUE)
+  }
+}
+# xoa cac cot Na o cac bien phan loai
+All_GPUs <- na.omit(All_GPUs)
+summary(All_GPUs)
+na_count <- colSums(is.na(All_GPUs))
+
+# In ra số lượng NA cho mỗi cột
+print(na_count)
+# sau khi làm sạch
+summary(All_GPUs)
+numeric_columns <- All_GPUs %>%
+  select_if(is.numeric)
+summary(numeric_columns)
+##########################Thong ke mo ta#################################
+#histogram
+create_histogram <- function(data, col, binwidth_size) {
+  ggplot(data, aes(data[,col])) +
+    geom_histogram(binwidth = binwidth_size, fill = "#6374c9") +
+    stat_bin(binwidth = binwidth_size, geom = "text", 
+             aes(label = after_stat(ifelse(count == 0, "", count))), vjust = -0.5, size = 3) +
+    theme_bw() + labs(x = col, y = NULL, title = paste("Histogram of", col))
+}
+
+shapiro.test(All_GPUs$Memory_Speed)
+num_columns <- ncol(All_GPUs)
+
+#L2_Cache
+create_histogram(All_GPUs, "L2_Cache", 500)
+boxplot(All_GPUs$L2_Cache, main = "Boxplot of L2_Cache")
+
+#Memory_Bandwidth
+create_histogram(All_GPUs, "Memory_Bandwidth", 50)
+boxplot(All_GPUs$Memory_Bandwidth, main = "Boxplot of Memory_Bandwidth")
+
+#Memory_Bus
+create_histogram(All_GPUs, "Memory_Bus", 200)
+boxplot(All_GPUs$Memory_Bus, main = "Boxplot of Memory_Bus")
+
+#Memory_Speed 
+create_histogram(All_GPUs, "Memory_Speed", 100)
+boxplot(All_GPUs$Memory_Speed, main = "Boxplot of Memory_Speed")
+
+#Open_GL
+create_histogram(All_GPUs, "Open_GL", 0.5)
+boxplot(All_GPUs$Open_GL, main = "Boxplot of Open_GL")
+
+#Release_Year
+create_histogram(All_GPUs, "Release_Year", 1)
+boxplot(All_GPUs$Release_Year, main = "Boxplot of Release_Year")
+
+#Shader
+create_histogram(All_GPUs, "Shader", 1)
+boxplot(All_GPUs$Shader, main = "Boxplot of Shader")
+
+cor(subset(All_GPUs, select = -c(Architecture, Dedicated, Direct_X, Integrated, Manufacturer, Name, Notebook_GPU, Resolution_WxH, SLI_Crossfire, Memory_Type)))
+corrplot(cor(subset(All_GPUs, select = -c(Architecture, Dedicated, Direct_X, Integrated, Manufacturer, Name, Notebook_GPU, Resolution_WxH, SLI_Crossfire, Memory_Type))) ,
+         number.cex = 1, tl.cex = 0.8,
+         method = "color",
+         addCoef.col = "orange",
+         type = "full")
